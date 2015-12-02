@@ -12,6 +12,10 @@ domain      = '.marathon.mesos'
 
 # Header
 header = """
+# HAproxy conf updater for Mesos cluster
+# This file is deployed via Puppet
+#
+
 global
   daemon
   log 127.0.0.1 local0
@@ -33,30 +37,26 @@ web_header = """
 frontend web_ui
   bind *:80
   mode http
-  redirect scheme https if !{ ssl_fc }
-  bind *:443 ssl crt /etc/haproxy/certs/snakeoil.pem
-  option httpclose
-  reqadd X-Forwarded-Proto:\ https
   """
 
 # Spark header
 spark_header = """
 frontend spark_app
-  bind *:4040
+  bind *:4050
   mode tcp
   """
 
 # Frontend
 hp_frontend = """
-  acl app__{0} hdr(x-marathon-app-id) -i {1}
-  use_backend {0} if app__{0}
+  acl app_{0} hdr_sub(host) -i {0}
+  use_backend {0} if app_{0}
   """
 
 # Backend
 hp_backend = """
 backend {0}
+  mode {4}
   balance roundrobin
-  mode tcp
   server {1}_{2} {3}:{2}
   """
 
@@ -88,11 +88,11 @@ def get_apps_frontend(url, app):
     for k, v in res_json['app'].items():
         if k == 'tasks':
             app_name = app.replace("/", "")
-            frontend.extend([app_name, app])
+            frontend.extend([app_name])
 
     return frontend
 
-def get_apps_backend(url, app):
+def get_apps_backend(url, app, mode):
     res = requests.get(url + app)
     res_json = json.loads(res.text)
     backend = []
@@ -103,11 +103,12 @@ def get_apps_backend(url, app):
             app_port = v[0]['ports'][0]
             app_host = v[0]['host']
             app_ip   = get_slave_ip(mesos_dns + app + domain)
-            backend.extend([app_name, app_host, app_port, app_ip])
+            mode     = mode
+            backend.extend([app_name, app_host, app_port, app_ip, mode])
 
     return backend
 
-def gen_conf(header, apps_url, group):
+def gen_conf(header, apps_url, group, mode):
     print header
     apps_list = get_apps_list(apps_url, group)
     for app in apps_list:
@@ -115,8 +116,9 @@ def gen_conf(header, apps_url, group):
         print hp_frontend.format(*frontend)
 
     for app in apps_list:
-        backend = get_apps_backend(apps_url, app)
+        backend = get_apps_backend(apps_url, app, mode)
         print hp_backend.format(*backend)
+
 
 if __name__ == '__main__':
 
@@ -124,7 +126,7 @@ if __name__ == '__main__':
     print header
 
     # Web apps
-    gen_conf(web_header, apps_url, 'web-ui')
+    gen_conf(web_header, apps_url, 'web-ui', 'http')
     
     # Spark apps
-    gen_conf(spark_header, apps_url, 'spark')
+    gen_conf(spark_header, apps_url, 'spark', 'tcp')
