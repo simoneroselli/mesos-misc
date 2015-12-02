@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Generate HAproxy configuration for the Mesos slaves
+#
 
 import requests
 import json
