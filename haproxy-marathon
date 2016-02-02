@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 #
-# Generate HAproxy configuration for the Mesos slaves
+# Generate HAproxy configuration for each Mesos slave
+# The script can be triggered by a cronjob.
+#
+# Author: Simone Roselli <simoneroselli78@gmail.com>
 #
 
 import requests
